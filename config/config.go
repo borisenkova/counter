@@ -52,15 +52,15 @@ func (c *Config) loadFromEnv() *Config {
 	}
 	c.Substring = []byte(substring)
 
-	urlRequestTimeoutStr := os.Getenv("URL_REQUEST_TIMEOUT_SECONDS")
+	urlRequestTimeoutStr := os.Getenv("URL_REQUEST_TIMEOUT_MILLISECONDS")
 	if len(urlRequestTimeoutStr) == 0 {
-		urlRequestTimeoutStr = "10"
+		urlRequestTimeoutStr = "1000"
 	}
 	urlRequestTimeout, err := strconv.ParseInt(urlRequestTimeoutStr, 10, 64)
 	if err != nil || urlRequestTimeout < 1 {
-		panic(fmt.Sprintf("Invalid value for URL_REQUEST_TIMEOUT_SECONDS: must be uint above zero, got %v", urlRequestTimeoutStr))
+		panic(fmt.Sprintf("Invalid value for URL_REQUEST_TIMEOUT_MILLISECONDS: must be uint above zero, got %v", urlRequestTimeoutStr))
 	}
-	c.URLRequestTimeout = time.Duration(urlRequestTimeout) * time.Second
+	c.URLRequestTimeout = time.Duration(urlRequestTimeout) * time.Millisecond
 
 	return c
 }
