@@ -14,16 +14,19 @@ type WorkerPool struct {
 
 type NewWorker func(wg *sync.WaitGroup, tasks <-chan *Source)
 
-func (p *WorkerPool) process(source *Source) {
+func (p *WorkerPool) process(source *Source, stop <-chan struct{}) {
 	if p.canSpawnWorkers() {
 		p.spawnWorker()
 	}
 
-	p.sendWork(source)
+	p.sendWork(source, stop)
 }
 
-func (p *WorkerPool) sendWork(source *Source) {
-	p.tasks <- source
+func (p *WorkerPool) sendWork(source *Source, stop <-chan struct{}) {
+	select {
+	case <-stop:
+	case p.tasks <- source:
+	}
 }
 
 func (p *WorkerPool) canSpawnWorkers() bool {

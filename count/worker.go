@@ -2,29 +2,41 @@ package count
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"log"
+	"math/big"
 	"sync"
 )
 
-func countSubstringIn(source io.ReadCloser, buf, sep []byte) (total uint64) {
+const averageWebpageSize = 2e+6
+const errStopSignalStr = "got.stop.signal"
+
+func countSubstringIn(source io.ReadCloser, buf, sep []byte, stop <-chan struct{}) (total *big.Int, err error) {
 	defer source.Close()
+	total = big.NewInt(0)
 	for {
-		n, err := source.Read(buf)
-		if n > 0 {
-			total += uint64(bytes.Count(buf, sep))
-		}
-		if err == io.EOF {
-			return
-		}
-		if err != nil {
-			return
+		select {
+		case <-stop:
+			return total, errors.New(errStopSignalStr)
+		default:
+			n, err := source.Read(buf)
+			if n > 0 {
+				count := big.NewInt(int64(bytes.Count(buf, sep)))
+				total.Add(total, count)
+			}
+			if err != nil {
+				if err == io.EOF {
+					err = nil
+				}
+				return total, err
+			}
 		}
 	}
 	return
 }
 
-func workerFunc(results chan<- *Result, substring []byte) func(wg *sync.WaitGroup, tasks <-chan *Source) {
+func workerFunc(results chan<- *Result, stop <-chan struct{}, substring []byte) func(wg *sync.WaitGroup, tasks <-chan *Source) {
 	return func(wg *sync.WaitGroup, tasks <-chan *Source) {
 		defer func() {
 			if r := recover(); r != nil {
@@ -33,10 +45,23 @@ func workerFunc(results chan<- *Result, substring []byte) func(wg *sync.WaitGrou
 		}()
 		defer wg.Done()
 
-		buf := make([]byte, 2e+6)
-		for source := range tasks {
-			subtotal := countSubstringIn(source, buf, substring)
-			results <- &Result{subtotal: subtotal, origin: source.origin}
+		buf := make([]byte, averageWebpageSize)
+		for {
+			select {
+			case source, ok := <-tasks:
+				if !ok {
+					return
+				}
+
+				subtotal, err := countSubstringIn(source, buf, substring, stop)
+				if err != nil && err.Error() == errStopSignalStr {
+					return
+				}
+
+				results <- &Result{subtotal: subtotal, origin: source.origin, error: err}
+			case <-stop:
+				return
+			}
 		}
 	}
 }
