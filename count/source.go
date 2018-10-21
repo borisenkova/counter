@@ -19,6 +19,9 @@ type Source struct {
 type loadContentFunc func(string) (io.ReadCloser, error)
 
 func NewSource(origin string, httpClient *http.Client) (*Source, error) {
+	if len(origin) == 0 {
+		return nil, errors.New("empty.origin")
+	}
 	if isFile(origin) {
 		return &Source{origin: origin, load: fromFile}, nil
 	}
