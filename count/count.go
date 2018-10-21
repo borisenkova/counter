@@ -54,16 +54,10 @@ func calculateTotal(wg *sync.WaitGroup, results <-chan *Result) {
 	defer wg.Done()
 
 	total := big.NewInt(0)
-	for {
-		select {
-		case result, ok := <-results:
-			if ok {
-				subtotal := big.NewInt(0).SetUint64(result.subtotal)
-				total.Add(total, subtotal)
-			} else {
-				log.Println("Total:", total)
-				return
-			}
-		}
+	for result := range results {
+		log.Printf("Count for %s: %d", result.origin, result.subtotal)
+		subtotal := big.NewInt(0).SetUint64(result.subtotal)
+		total.Add(total, subtotal)
 	}
+	log.Println("Total:", total)
 }

@@ -25,7 +25,7 @@ func NewSource(origin string, httpClient *http.Client) (*Source, error) {
 	if isURL(origin) {
 		return &Source{origin: origin, load: fromURL(httpClient)}, nil
 	}
-	return nil, errors.New("unknown.Source")
+	return nil, errors.New("unknown.source")
 }
 
 func (s *Source) Read(p []byte) (n int, err error) {
@@ -63,7 +63,7 @@ func isURL(rawURL string) bool {
 func fromFile(name string) (io.ReadCloser, error) {
 	file, err := os.Open(name)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("can't open file %s: %v", name, err))
+		return nil, fmt.Errorf("can't open file %s: %v", name, err)
 	}
 
 	return file, nil
@@ -73,7 +73,7 @@ func fromURL(httpClient *http.Client) loadContentFunc {
 	return func(url string) (io.ReadCloser, error) {
 		resp, err := httpClient.Get(url)
 		if err != nil {
-			return nil, errors.New(fmt.Sprintf("can't load URL %s content: %v", url, err))
+			return nil, fmt.Errorf("can't load URL %s content: %v", url, err)
 		}
 
 		return resp.Body, nil

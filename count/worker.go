@@ -7,7 +7,7 @@ import (
 	"sync"
 )
 
-func countSubstringIn(source *Source, buf, sep []byte) (total uint64) {
+func countSubstringIn(source io.ReadCloser, buf, sep []byte) (total uint64) {
 	defer source.Close()
 	for {
 		n, err := source.Read(buf)
@@ -34,16 +34,9 @@ func workerFunc(results chan<- *Result, substring []byte) func(wg *sync.WaitGrou
 		defer wg.Done()
 
 		buf := make([]byte, 2e+6)
-		for {
-			select {
-			case source, ok := <-tasks:
-				if ok {
-					subtotal := countSubstringIn(source, buf, substring)
-					results <- &Result{subtotal: subtotal, origin: source.origin}
-				} else {
-					return
-				}
-			}
+		for source := range tasks {
+			subtotal := countSubstringIn(source, buf, substring)
+			results <- &Result{subtotal: subtotal, origin: source.origin}
 		}
 	}
 }
