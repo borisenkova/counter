@@ -5,20 +5,20 @@ import (
 	"os"
 
 	"github.com/borisenkova/counter/config"
-	"github.com/borisenkova/counter/counter"
+	"github.com/borisenkova/counter/count"
 	"github.com/borisenkova/counter/log"
 )
 
 func main() {
 	log.InitLogging()
 	conf := config.Load()
-	tasks := make(chan *counter.Source, conf.TasksBacklogSize)
-	results := make(chan *counter.Result, conf.ResultsBacklogSize)
+	tasks := make(chan *count.Source, conf.TasksBacklogSize)
+	results := make(chan *count.Result, conf.ResultsBacklogSize)
 	substring := conf.Substring
 
 	httpClient := &http.Client{
 		Timeout: conf.URLRequestTimeout,
 	}
 
-	counter.Run(os.Stdin, substring, conf.MaxNumberOfWorkers, tasks, results, httpClient)
+	count.Run(os.Stdin, substring, conf.MaxNumberOfWorkers, tasks, results, httpClient)
 }
