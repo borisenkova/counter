@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 )
 
 type Source struct {
@@ -25,7 +26,7 @@ func NewSource(origin string, httpClient *http.Client) (*Source, error) {
 	if isFile(origin) {
 		return &Source{origin: origin, load: fromFile}, nil
 	}
-	if isURL(origin) {
+	if isHTTPURL(origin) {
 		return &Source{origin: origin, load: fromURL(httpClient)}, nil
 	}
 	return nil, errors.New("unknown.source")
@@ -58,9 +59,19 @@ func isFile(path string) bool {
 	return !os.IsNotExist(err)
 }
 
-func isURL(rawURL string) bool {
-	_, err := url.Parse(rawURL)
-	return err == nil
+const (
+	schemeHTTP  = "http"
+	schemeHTTPS = "https"
+)
+
+func isHTTPURL(rawURL string) bool {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+
+	scheme := strings.ToLower(parsed.Scheme)
+	return scheme == schemeHTTP || scheme == schemeHTTPS
 }
 
 func fromFile(name string) (io.ReadCloser, error) {
