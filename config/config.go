@@ -46,7 +46,7 @@ func (c *Config) loadFromEnv() *Config {
 	}
 	c.ResultsBacklogSize = resultsBacklogSize
 
-	substring := os.Getenv("RESULTS_BACKLOG_SIZE")
+	substring := os.Getenv("SUBSTRING")
 	if len(substring) == 0 {
 		substring = "Go"
 	}
