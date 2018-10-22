@@ -26,25 +26,8 @@ func (c *Config) loadFromEnv() *Config {
 	}
 	c.MaxNumberOfWorkers = maxNumberOfWorkers
 
-	tasksBacklogSizeStr := os.Getenv("TASKS_BACKLOG_SIZE")
-	if len(tasksBacklogSizeStr) == 0 {
-		tasksBacklogSizeStr = "3"
-	}
-	tasksBacklogSize, err := strconv.Atoi(tasksBacklogSizeStr)
-	if err != nil {
-		panic(fmt.Sprintf("Invalid value for TASKS_BACKLOG_SIZE: must be int, got %v", tasksBacklogSizeStr))
-	}
-	c.TasksBacklogSize = tasksBacklogSize
-
-	resultsBacklogSizeStr := os.Getenv("RESULTS_BACKLOG_SIZE")
-	if len(resultsBacklogSizeStr) == 0 {
-		resultsBacklogSizeStr = "3"
-	}
-	resultsBacklogSize, err := strconv.Atoi(resultsBacklogSizeStr)
-	if err != nil {
-		panic(fmt.Sprintf("Invalid value for RESULTS_BACKLOG_SIZE: must be int, got %v", resultsBacklogSizeStr))
-	}
-	c.ResultsBacklogSize = resultsBacklogSize
+	c.TasksBacklogSize = 512
+	c.ResultsBacklogSize = 512
 
 	substring := os.Getenv("SUBSTRING")
 	if len(substring) == 0 {
