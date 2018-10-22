@@ -37,7 +37,7 @@ func (c *Config) loadFromEnv() *Config {
 
 	urlRequestTimeoutStr := os.Getenv("URL_REQUEST_TIMEOUT_MILLISECONDS")
 	if len(urlRequestTimeoutStr) == 0 {
-		urlRequestTimeoutStr = "1000"
+		urlRequestTimeoutStr = "60000"
 	}
 	urlRequestTimeout, err := strconv.ParseInt(urlRequestTimeoutStr, 10, 64)
 	if err != nil || urlRequestTimeout < 1 {

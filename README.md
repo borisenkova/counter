@@ -18,7 +18,7 @@ Counts substring "Go" in sources from stdin.
 Parameters are passed through environmental variables. Possible parameters are:
 * `MAX_NUMBER_OF_WORKERS` -- maximum number of sources to process simultaneously. Should be above zero and below math.MaxInt32. Default value is `5`;
 * `SUBSTRING` -- string to count in sources. Default value is `Go`;
-* `URL_REQUEST_TIMEOUT_MILLISECONDS` -- timeout for processing URL source in milliseconds. Default value is `1000`. Should be increased before processing large web pages or in case of slow network or slow endpoint servers;
+* `URL_REQUEST_TIMEOUT_MILLISECONDS` -- timeout for processing URL source in milliseconds. Default value is `60000`. Should be increased before processing large web pages or in case of slow network or slow endpoint servers;
 
 ## Example
 
