@@ -21,7 +21,7 @@ func (c *Config) loadFromEnv() *Config {
 		maxNumberOfWorkersStr = "5"
 	}
 	maxNumberOfWorkers, err := strconv.Atoi(maxNumberOfWorkersStr)
-	if err != nil {
+	if err != nil || maxNumberOfWorkers <= 0 {
 		panic(fmt.Sprintf("Invalid value for MAX_NUMBER_OF_WORKERS: must be int, got %v", maxNumberOfWorkersStr))
 	}
 	c.MaxNumberOfWorkers = maxNumberOfWorkers
