@@ -12,7 +12,47 @@ import (
 const averageWebpageSize = 2e+6
 const errStopSignalStr = "got.stop.signal"
 
-func countSubstringIn(source io.ReadCloser, buf, sep []byte, stop <-chan struct{}) (total *big.Int, err error) {
+func countSubstr(source io.ReadCloser, buf, substr []byte) (total *big.Int, err error) {
+	defer source.Close()
+	total = big.NewInt(0)
+	substrIndex := 0
+	substrLen := len(substr)
+	if substrLen == 0 {
+		panic("length of substring must be bigger than zero")
+	}
+
+	var subtotal int64
+	for {
+		n, err := source.Read(buf)
+		subtotal = 0
+		for bufIndex := 0; bufIndex < n; bufIndex++ {
+			if buf[bufIndex] == substr[substrIndex] {
+				substrIndex++
+			} else {
+				substrIndex = 0
+				if buf[bufIndex] == substr[substrIndex] {
+					substrIndex++
+				}
+			}
+			if substrIndex == substrLen {
+				subtotal++
+				substrIndex = 0
+			}
+		}
+
+		total.Add(total, big.NewInt(subtotal))
+
+		if err != nil {
+			if err == io.EOF {
+				err = nil
+			}
+			return total, err
+		}
+	}
+	return
+}
+
+func countSubstring(source io.ReadCloser, buf, sep []byte, stop <-chan struct{}) (total *big.Int, err error) {
 	defer source.Close()
 	total = big.NewInt(0)
 	for {
@@ -53,7 +93,7 @@ func workerFunc(results chan<- *Result, stop <-chan struct{}, substring []byte) 
 					return
 				}
 
-				subtotal, err := countSubstringIn(source, buf, substring, stop)
+				subtotal, err := countSubstring(source, buf, substring, stop)
 				if err != nil && err.Error() == errStopSignalStr {
 					return
 				}
