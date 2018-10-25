@@ -9,8 +9,6 @@ import (
 
 type Config struct {
 	MaxNumberOfWorkers int
-	TasksBacklogSize   int
-	ResultsBacklogSize int
 	URLRequestTimeout  time.Duration
 	Substring          []byte
 }
@@ -25,9 +23,6 @@ func (c *Config) loadFromEnv() *Config {
 		panic(fmt.Sprintf("Invalid value for MAX_NUMBER_OF_WORKERS: must be int, got %v", maxNumberOfWorkersStr))
 	}
 	c.MaxNumberOfWorkers = maxNumberOfWorkers
-
-	c.TasksBacklogSize = 512
-	c.ResultsBacklogSize = 512
 
 	substring := os.Getenv("SUBSTRING")
 	if len(substring) == 0 {

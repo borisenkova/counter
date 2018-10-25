@@ -2,10 +2,10 @@ package count
 
 import (
 	"bufio"
+	"context"
 	"io"
 	"log"
 	"math/big"
-	"net/http"
 	"sync"
 )
 
@@ -15,72 +15,53 @@ type Result struct {
 	error
 }
 
-func Run(input io.Reader, substring []byte, maxNumberOfWorkers int, tasks chan *Source, results chan *Result, stop <-chan struct{}, httpClient *http.Client) {
+func Run(ctx context.Context, input io.Reader, substring []byte, maxNumberOfWorkers int) {
 	workersWg := &sync.WaitGroup{}
-	totalWg := &sync.WaitGroup{}
-	stopInput := make(chan struct{})
-	inputWg := &sync.WaitGroup{}
-	stopWorkers := make(chan struct{})
+
+	tasks := processInput(ctx, input)
+
+	newWorker := workerFunc(substring)
+	results := newWorkerPool(ctx, maxNumberOfWorkers, newWorker, workersWg).consume(tasks)
+	calculateTotal(results)
+	workersWg.Wait()
+}
+
+func processInput(ctx context.Context, input io.Reader) <-chan *Source {
+	tasks := make(chan *Source)
 
 	go func() {
-		<-stop
-		close(stopInput)
-		inputWg.Wait()
-		close(stopWorkers)
-	}()
-
-	newWorker := workerFunc(results, stopWorkers, substring)
-	workerPool := newWorkerPool(tasks, maxNumberOfWorkers, newWorker, workersWg)
-
-	totalWg.Add(1)
-	go calculateTotal(totalWg, results)
-
-	scanner := bufio.NewScanner(input)
-
-	inputWg.Add(1)
-	stopped := processInput(scanner, workerPool, httpClient, stopInput, inputWg)
-	if err := scanner.Err(); err != nil {
-		log.Printf("Error occurred on reading input: %v", err)
-	}
-
-	if !stopped {
-		close(tasks)
-	}
-
-	workersWg.Wait()
-	close(results)
-	totalWg.Wait()
-}
-
-func processInput(scanner *bufio.Scanner, pool *WorkerPool, client *http.Client, stop <-chan struct{}, wg *sync.WaitGroup) (stopped bool) {
-	defer wg.Done()
-	for {
-		select {
-		case <-stop:
-			return true
-		default:
-			if hasMore := scanner.Scan(); !hasMore {
-				return false
+		scanner := bufio.NewScanner(input)
+		defer func() {
+			if err := scanner.Err(); err != nil {
+				log.Printf("Error occurred on reading input: %v", err)
 			}
-			origin := scanner.Text()
-			source, err := NewSource(origin, client)
-			if err != nil {
-				log.Printf("Can't identify source '%s': %v", origin, err)
-				continue
-			}
-			pool.process(source, stop)
-		}
-	}
-}
+		}()
+		defer close(tasks)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				if hasMore := scanner.Scan(); !hasMore {
+					return
+				}
 
-func calculateTotal(wg *sync.WaitGroup, results <-chan *Result) {
-	defer func() {
-		if r := recover(); r != nil {
-			log.Println("Recovered in calculateTotal", r)
+				origin := scanner.Text()
+				source, err := NewSource(origin)
+				if err != nil {
+					log.Printf("Can't identify source '%s': %v", origin, err)
+					continue
+				}
+
+				tasks <- source
+			}
 		}
 	}()
-	defer wg.Done()
 
+	return tasks
+}
+
+func calculateTotal(results <-chan *Result) {
 	total := big.NewInt(0)
 	for result := range results {
 		if result.error != nil {
@@ -91,5 +72,6 @@ func calculateTotal(wg *sync.WaitGroup, results <-chan *Result) {
 		log.Printf("Count for %s: %v", result.origin, result.subtotal)
 		total.Add(total, result.subtotal)
 	}
+
 	log.Println("Total:", total)
 }

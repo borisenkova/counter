@@ -1,6 +1,7 @@
 package count
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -17,56 +18,56 @@ import (
 
 func Test_WorkerPool_ProcessFile(t *testing.T) {
 	substring := []byte("SomeSubstring")
-	pool, results, tearDown := createWorkerPool(substring)
-	defer tearDown()
+	pool, tasks := createWorkerPool(context.Background(), substring)
 
 	numberOfOccurrences := uint64(5)
 	t.Run(fmt.Sprintf("When file with %d occurences of substring is processed", numberOfOccurrences), func(t *testing.T) {
 		file := createTmpFileFilledWith(t, substring, numberOfOccurrences)
 
-		source, err := NewSource(file.Name(), nil)
+		source, err := NewSource(file.Name())
 		require.NoError(t, err)
-
-		pool.process(source, nil)
+		tasks <- source
 		t.Run("It must return correct subtotal", func(t *testing.T) {
-			expectSubtotal(t, results, numberOfOccurrences, file.Name(), time.Second)
+			expectSubtotal(t, pool.results, numberOfOccurrences, file.Name(), time.Second)
 		})
 	})
 }
 
 func Test_WorkerPool_ProcessURL(t *testing.T) {
 	substring := []byte("SomeSubstring")
-	pool, results, tearDown := createWorkerPool(substring)
-	defer tearDown()
+	pool, tasks := createWorkerPool(context.Background(), substring)
 
 	numberOfOccurrences := uint64(5)
 	t.Run(fmt.Sprintf("When webpage with %d occurences of substring is processed", numberOfOccurrences), func(t *testing.T) {
 		s := spawnServer(t, substring, numberOfOccurrences)
 		defer s.Close()
 
-		source, err := NewSource(s.URL, &http.Client{Timeout: time.Hour})
+		source, err := NewSource(s.URL)
 		require.NoError(t, err)
 
-		pool.process(source, nil)
+		tasks <- source
 		t.Run("It must return correct subtotal", func(t *testing.T) {
-			expectSubtotal(t, results, numberOfOccurrences, s.URL, time.Second)
+			expectSubtotal(t, pool.results, numberOfOccurrences, s.URL, time.Second)
 		})
 	})
 }
 
 func Test_WorkerPool_Stop(t *testing.T) {
 	substring := []byte("SomeSubstring")
-	stopWorkers := make(chan struct{})
-	pool, _, tearDown := createWorkerPool(substring, stopWorkers)
-	defer tearDown()
+	ctx, cancel := context.WithCancel(context.Background())
+	s := spawnSlowServer()
+	defer s.Close()
 
-	t.Run("When /dev/urandom is processed and pool.process doesn't block", func(t *testing.T) {
-		source, err := NewSource("/dev/urandom", nil)
+	pool, _ := createWorkerPool(ctx, substring)
+
+	t.Run("When really slow origin is processed", func(t *testing.T) {
+		source, err := NewSource(s.URL)
 		require.NoError(t, err)
 
-		pool.process(source, nil)
-		t.Run("And stop channel is closed", func(t *testing.T) {
-			close(stopWorkers)
+		pool.process(source)
+		t.Run("And context is canceled", func(t *testing.T) {
+			time.Sleep(time.Second)
+			cancel()
 
 			t.Run("It must stop successfully", func(t *testing.T) {
 				expectWorkersToStopIn(t, pool.wg, time.Second)
@@ -75,17 +76,13 @@ func Test_WorkerPool_Stop(t *testing.T) {
 	})
 }
 
-func createWorkerPool(substring []byte, optionalStop ...chan struct{}) (*WorkerPool, <-chan *Result, func()) {
-	tasks := make(chan *Source)
-	results := make(chan *Result)
-	stop := make(chan struct{})
-	if len(optionalStop) > 0 {
-		stop = optionalStop[0]
-	}
-	worker := workerFunc(results, stop, substring)
-	pool := newWorkerPool(tasks, 1, worker, &sync.WaitGroup{})
+func createWorkerPool(ctx context.Context, substring []byte) (*WorkerPool, chan *Source) {
+	worker := workerFunc(substring)
+	pool := newWorkerPool(ctx, 1, worker, &sync.WaitGroup{})
+	tasks := make(chan *Source, 1)
+	pool.consume(tasks)
 
-	return pool, results, func() { close(tasks) }
+	return pool, tasks
 }
 
 func createTmpFileFilledWith(t *testing.T, data []byte, repeats uint64) *os.File {
@@ -108,13 +105,18 @@ func expectSubtotal(t *testing.T, results <-chan *Result, subtotal uint64, origi
 }
 
 func expectWorkersToStopIn(t *testing.T, wg *sync.WaitGroup, timeout time.Duration) {
-	timer := time.NewTimer(timeout)
 	done := make(chan struct{})
+
 	go func() {
 		wg.Wait()
 		done <- struct{}{}
 	}()
 
+	expectStopIn(t, done, timeout)
+}
+
+func expectStopIn(t *testing.T, done <-chan struct{}, timeout time.Duration) {
+	timer := time.NewTimer(timeout)
 	select {
 	case <-done:
 	case <-timer.C:
@@ -126,6 +128,17 @@ func spawnServer(t *testing.T, data []byte, repeats uint64) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		writeData(t, w, data, repeats)
+	}))
+}
+
+func spawnSlowServer() *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-time.After(time.Minute):
+		case <-r.Context().Done():
+			return
+		}
+		w.WriteHeader(http.StatusOK)
 	}))
 }
 

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"net/http"
+	"context"
 	"os"
 	"os/signal"
 	"syscall"
@@ -14,22 +14,16 @@ import (
 func main() {
 	log.InitLogging()
 	conf := config.Load()
-	tasks := make(chan *count.Source, conf.TasksBacklogSize)
-	results := make(chan *count.Result, conf.ResultsBacklogSize)
 	substring := conf.Substring
-
-	httpClient := &http.Client{
-		Timeout: conf.URLRequestTimeout,
-	}
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt)
 	signal.Notify(sigChan, syscall.SIGTERM)
-	stop := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		<-sigChan
-		close(stop)
+		cancel()
 	}()
 
-	count.Run(os.Stdin, substring, conf.MaxNumberOfWorkers, tasks, results, stop, httpClient)
+	count.Run(ctx, os.Stdin, substring, conf.MaxNumberOfWorkers, conf.URLRequestTimeout)
 }

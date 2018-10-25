@@ -1,30 +1,60 @@
 package count
 
 import (
+	"context"
 	"sync"
 )
 
 type WorkerPool struct {
+	ctx             context.Context
 	maxPoolSize     int
 	numberOfWorkers int
-	tasks           chan *Source
 	newWorkerFunc   NewWorker
 	wg              *sync.WaitGroup
+	tasks           chan *Source
+	results         chan *Result
 }
 
-type NewWorker func(wg *sync.WaitGroup, tasks <-chan *Source)
+type NewWorker func(ctx context.Context, wg *sync.WaitGroup, tasks <-chan *Source, results chan<- *Result)
 
-func (p *WorkerPool) process(source *Source, stop <-chan struct{}) {
+func (p *WorkerPool) consume(tasks <-chan *Source) <-chan *Result {
+	p.wg.Add(1)
+	go func() {
+		defer func() {
+			close(p.tasks)
+			p.wg.Done()
+			p.wg.Wait()
+			close(p.results)
+		}()
+
+		for {
+			select {
+			case <-p.ctx.Done():
+				return
+			case source, hasMore := <-tasks:
+				if !hasMore {
+					return
+				}
+
+				p.process(source)
+			}
+		}
+	}()
+
+	return p.results
+}
+
+func (p *WorkerPool) process(source *Source) {
 	if p.canSpawnWorkers() {
 		p.spawnWorker()
 	}
 
-	p.sendWork(source, stop)
+	p.sendWork(source)
 }
 
-func (p *WorkerPool) sendWork(source *Source, stop <-chan struct{}) {
+func (p *WorkerPool) sendWork(source *Source) {
 	select {
-	case <-stop:
+	case <-p.ctx.Done():
 	case p.tasks <- source:
 	}
 }
@@ -35,16 +65,18 @@ func (p *WorkerPool) canSpawnWorkers() bool {
 
 func (p *WorkerPool) spawnWorker() {
 	p.wg.Add(1)
-	go p.newWorkerFunc(p.wg, p.tasks)
+	go p.newWorkerFunc(p.ctx, p.wg, p.tasks, p.results)
 	p.numberOfWorkers++
 }
 
-func newWorkerPool(tasks chan *Source, poolSize int, workerFunc NewWorker, wg *sync.WaitGroup) *WorkerPool {
+func newWorkerPool(ctx context.Context, poolSize int, workerFunc NewWorker, wg *sync.WaitGroup) *WorkerPool {
 	pool := &WorkerPool{
+		ctx:           ctx,
 		maxPoolSize:   poolSize,
 		newWorkerFunc: workerFunc,
 		wg:            wg,
-		tasks:         tasks,
+		tasks:         make(chan *Source),
+		results:       make(chan *Result),
 	}
 
 	return pool

@@ -2,37 +2,48 @@ package count
 
 import (
 	"bytes"
+	"context"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/require"
 )
 
 func Test_Run_Stop(t *testing.T) {
-	tasks := make(chan *Source)
-	results := make(chan *Result)
 	substring := []byte("SomeSubstring")
+	ctx := context.Background()
+	s := spawnServer(t, substring, 1)
+	defer s.Close()
 
-	t.Run("When really long input is processed", func(t *testing.T) {
-		stop := make(chan struct{})
+	t.Run("When URL is processed", func(t *testing.T) {
 		done := make(chan struct{})
-		input := bytes.NewBufferString("/dev/urandom\n/dev/urandom\n/dev/urandom")
 		go func() {
-			Run(input, substring, 2, tasks, results, stop, nil)
+			Run(ctx, bytes.NewBufferString(s.URL), substring, 1, time.Minute)
 			done <- struct{}{}
 		}()
-		t.Run("And stop channel is closed", func(t *testing.T) {
-			time.Sleep(time.Second)
-			close(stop)
 
-			t.Run("It must successfully", func(t *testing.T) {
-				timeout := time.Second
-				timer := time.NewTimer(timeout)
-				select {
-				case <-done:
-				case <-timer.C:
-					require.FailNowf(t, "", "Didn't stop after %v", timeout)
-				}
+		t.Run("It must stop successfully after processing", func(t *testing.T) {
+			expectStopIn(t, done, time.Second)
+		})
+	})
+}
+
+func Test_Run_Stop_SigInt(t *testing.T) {
+	substring := []byte("SomeSubstring")
+	ctx, cancel := context.WithCancel(context.Background())
+	s := spawnSlowServer()
+	defer s.Close()
+
+	t.Run("When really slow origin is processed", func(t *testing.T) {
+		done := make(chan struct{})
+		go func() {
+			Run(ctx, bytes.NewBufferString(s.URL), substring, 1)
+			done <- struct{}{}
+		}()
+
+		t.Run("And context is canceled", func(t *testing.T) {
+			cancel()
+
+			t.Run("It must stop successfully", func(t *testing.T) {
+				expectStopIn(t, done, time.Second)
 			})
 		})
 	})

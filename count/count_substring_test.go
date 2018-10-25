@@ -2,6 +2,7 @@ package count
 
 import (
 	"bytes"
+	"context"
 	"io/ioutil"
 	"testing"
 
@@ -18,7 +19,7 @@ func expectCount(t *testing.T, source string, bufLen int, substr string, expecte
 	sourceBytes := ioutil.NopCloser(bytes.NewBuffer([]byte(source)))
 	buf := make([]byte, bufLen)
 	substrBytes := []byte(substr)
-	count, err := countSubstr(sourceBytes, buf, substrBytes)
+	count, err := countSubstring(context.Background(), sourceBytes, buf, substrBytes)
 	require.NoError(t, err)
 	require.Equal(t, int64(expectedCount), count.Int64())
 }
