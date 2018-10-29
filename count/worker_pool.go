@@ -44,6 +44,10 @@ func (p *WorkerPool) consume(tasks <-chan *Source) <-chan *Result {
 	return p.results
 }
 
+func (p *WorkerPool) waitForWorkersStop() {
+	p.wg.Wait()
+}
+
 func (p *WorkerPool) process(source *Source) {
 	if p.canSpawnWorkers() {
 		p.spawnWorker()
@@ -69,12 +73,12 @@ func (p *WorkerPool) spawnWorker() {
 	p.numberOfWorkers++
 }
 
-func newWorkerPool(ctx context.Context, poolSize int, workerFunc NewWorker, wg *sync.WaitGroup) *WorkerPool {
+func newWorkerPool(ctx context.Context, poolSize int, workerFunc NewWorker) *WorkerPool {
 	pool := &WorkerPool{
 		ctx:           ctx,
 		maxPoolSize:   poolSize,
 		newWorkerFunc: workerFunc,
-		wg:            wg,
+		wg:            &sync.WaitGroup{},
 		tasks:         make(chan *Source),
 		results:       make(chan *Result),
 	}

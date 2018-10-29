@@ -6,7 +6,6 @@ import (
 	"io"
 	"log"
 	"math/big"
-	"sync"
 )
 
 type Result struct {
@@ -16,14 +15,12 @@ type Result struct {
 }
 
 func Run(ctx context.Context, input io.Reader, substring []byte, maxNumberOfWorkers int) {
-	workersWg := &sync.WaitGroup{}
-
 	tasks := processInput(ctx, input)
 
-	newWorker := workerFunc(substring)
-	results := newWorkerPool(ctx, maxNumberOfWorkers, newWorker, workersWg).consume(tasks)
+	pool := newWorkerPool(ctx, maxNumberOfWorkers, workerFunc(substring))
+	results := pool.consume(tasks)
+
 	calculateTotal(results)
-	workersWg.Wait()
 }
 
 func processInput(ctx context.Context, input io.Reader) <-chan *Source {
@@ -37,6 +34,7 @@ func processInput(ctx context.Context, input io.Reader) <-chan *Source {
 			}
 		}()
 		defer close(tasks)
+
 		for {
 			select {
 			case <-ctx.Done():
