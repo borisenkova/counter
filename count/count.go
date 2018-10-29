@@ -2,13 +2,11 @@ package count
 
 import (
 	"context"
-	"errors"
 	"io"
 	"math/big"
 )
 
 const averageWebpageSize = 2e+6
-const errCountSubstringCanceledStr = "count substring is canceled"
 
 func countSubstring(ctx context.Context, source io.Reader, buf, substr []byte) (total *big.Int, err error) {
 	total = big.NewInt(0)
@@ -22,7 +20,7 @@ func countSubstring(ctx context.Context, source io.Reader, buf, substr []byte) (
 	for {
 		select {
 		case <-ctx.Done():
-			return total, errors.New(errCountSubstringCanceledStr)
+			return total, ctx.Err()
 		default:
 			n, err := source.Read(buf)
 			subtotal = 0
