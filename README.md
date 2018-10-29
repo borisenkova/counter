@@ -7,6 +7,7 @@ Counts substring "Go" in sources from stdin.
 * only Go standard library is used for implementation. `github.com/stretchr/testify` is used in tests;
 * no global variables are used;
 * only linux file paths are supported;
+* only regular linux files are supported;
 * stdin separator is '\n' (*nix newline);
 * only successfully processed sources are included in 'Total' in the end;
 * max number of workers are limited by math.MaxInt32 (please be sure that `ulimit -n` returns reasonable number before increasing the number of workers);

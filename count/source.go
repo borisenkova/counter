@@ -29,7 +29,7 @@ func NewSource(origin string) (*Source, error) {
 	if len(origin) == 0 {
 		return nil, errors.New(errEmptyOriginStr)
 	}
-	if isFile(origin) {
+	if isRegularFile(origin) {
 		return &Source{origin: origin, load: fromFile}, nil
 	}
 	if isHTTPURL(origin) {
@@ -67,9 +67,14 @@ func (s *Source) Close() error {
 	return nil
 }
 
-func isFile(path string) bool {
-	_, err := os.Stat(path)
-	return !os.IsNotExist(err)
+// isRegularFile returns true if file from provided filepath is regular file
+func isRegularFile(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+
+	return info.Mode().IsRegular()
 }
 
 const (
