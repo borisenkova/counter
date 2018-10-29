@@ -128,6 +128,10 @@ func fromURL(timeout time.Duration) loadContentFunc {
 	return func(c context.Context, url string) (io.ReadCloser, context.CancelFunc, error) {
 		ctx, cancel := context.WithTimeout(c, timeout)
 		req, err := http.NewRequest(http.MethodGet, url, nil)
+		// Request identity encoding to avoid 'unexpected EOF' error if content
+		// is gzipped
+		// via https://stackoverflow.com/a/21160982
+		req.Header.Add("Accept-Encoding", "identity")
 		if err != nil {
 			return nil, nil, fmt.Errorf("can't create HTTP request from URL %s: %s", url, err)
 		}
