@@ -6,19 +6,19 @@ import (
 	"sync"
 )
 
-type WorkerPool struct {
+type workerPool struct {
 	ctx             context.Context
 	maxPoolSize     int
 	numberOfWorkers int
-	newWorkerFunc   NewWorker
+	newWorkerFunc   newWorker
 	wg              *sync.WaitGroup
-	tasks           chan Source
-	results         chan *Result
+	tasks           chan source
+	results         chan *result
 }
 
-type NewWorker func(ctx context.Context, wg *sync.WaitGroup, tasks <-chan Source, results chan<- *Result)
+type newWorker func(ctx context.Context, wg *sync.WaitGroup, tasks <-chan source, results chan<- *result)
 
-func (p *WorkerPool) consume(tasks <-chan Source) <-chan *Result {
+func (p *workerPool) consume(tasks <-chan source) <-chan *result {
 	p.wg.Add(1)
 	go func() {
 		defer func() {
@@ -45,11 +45,11 @@ func (p *WorkerPool) consume(tasks <-chan Source) <-chan *Result {
 	return p.results
 }
 
-func (p *WorkerPool) waitForWorkersStop() {
+func (p *workerPool) waitForWorkersStop() {
 	p.wg.Wait()
 }
 
-func (p *WorkerPool) process(source Source) {
+func (p *workerPool) process(source source) {
 	if p.canSpawnWorkers() {
 		p.spawnWorker()
 	}
@@ -57,38 +57,38 @@ func (p *WorkerPool) process(source Source) {
 	p.sendWork(source)
 }
 
-func (p *WorkerPool) sendWork(source Source) {
+func (p *workerPool) sendWork(source source) {
 	select {
 	case <-p.ctx.Done():
 	case p.tasks <- source:
 	}
 }
 
-func (p *WorkerPool) canSpawnWorkers() bool {
+func (p *workerPool) canSpawnWorkers() bool {
 	return p.numberOfWorkers < p.maxPoolSize
 }
 
-func (p *WorkerPool) spawnWorker() {
+func (p *workerPool) spawnWorker() {
 	p.wg.Add(1)
 	go p.newWorkerFunc(p.ctx, p.wg, p.tasks, p.results)
 	p.numberOfWorkers++
 }
 
-func newWorkerPool(ctx context.Context, poolSize int, workerFunc NewWorker) *WorkerPool {
-	pool := &WorkerPool{
+func newWorkerPool(ctx context.Context, poolSize int, workerFunc newWorker) *workerPool {
+	pool := &workerPool{
 		ctx:           ctx,
 		maxPoolSize:   poolSize,
 		newWorkerFunc: workerFunc,
 		wg:            &sync.WaitGroup{},
-		tasks:         make(chan Source),
-		results:       make(chan *Result),
+		tasks:         make(chan source),
+		results:       make(chan *result),
 	}
 
 	return pool
 }
 
-func workerFunc(substring []byte) NewWorker {
-	return func(ctx context.Context, wg *sync.WaitGroup, tasks <-chan Source, results chan<- *Result) {
+func workerFunc(substring []byte) newWorker {
+	return func(ctx context.Context, wg *sync.WaitGroup, tasks <-chan source, results chan<- *result) {
 		defer func() {
 			if r := recover(); r != nil {
 				log.Println("Recovered in workerFunc", r)
@@ -109,7 +109,7 @@ func workerFunc(substring []byte) NewWorker {
 					return
 				}
 
-				results <- &Result{subtotal: subtotal, origin: source.Origin(), error: err}
+				results <- &result{subtotal: subtotal, origin: source.origin(), error: err}
 			case <-ctx.Done():
 				return
 			}

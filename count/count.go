@@ -53,9 +53,9 @@ func countSubstring(ctx context.Context, source io.Reader, buf, substr []byte) (
 	return
 }
 
-func processSource(ctx context.Context, source Source, buf, substring []byte) (subtotal *big.Int, err error) {
+func processSource(ctx context.Context, source source, buf, substring []byte) (subtotal *big.Int, err error) {
 	defer source.Close()
-	if err = source.Load(ctx); err != nil {
+	if err = source.load(ctx); err != nil {
 		return
 	}
 

@@ -12,10 +12,10 @@ import (
 	"time"
 )
 
-type Source interface {
+type source interface {
 	io.ReadCloser
-	Origin() string
-	Load(ctx context.Context) error
+	origin() string
+	load(ctx context.Context) error
 }
 
 const (
@@ -23,57 +23,57 @@ const (
 	errUnknownSourceStr = "unknown source"
 )
 
-func NewSource(origin string, timeout time.Duration) (Source, error) {
+func newSource(origin string, timeout time.Duration) (source, error) {
 	if len(origin) == 0 {
 		return nil, errors.New(errEmptyOriginStr)
 	}
 	if isRegularFile(origin) {
 		source := &fileSource{}
-		source.origin = origin
+		source.origin_ = origin
 		return source, nil
 	}
 	if isHTTPURL(origin) {
 		source := &urlSource{}
-		source.origin = origin
+		source.origin_ = origin
 		source.timeout = timeout
 		return source, nil
 	}
 	return nil, errors.New(errUnknownSourceStr)
 }
 
-type source struct {
+type content struct {
 	io.ReadCloser
 	contentIsLoaded bool
-	origin          string
+	origin_         string
 }
 
-func (s *source) Read(p []byte) (n int, err error) {
-	if s.ReadCloser == nil {
+func (c *content) Read(p []byte) (n int, err error) {
+	if c.ReadCloser == nil {
 		return 0, nil
 	}
 
-	return s.ReadCloser.Read(p)
+	return c.ReadCloser.Read(p)
 }
 
-func (s *source) Close() error {
-	if s.contentIsLoaded {
-		return s.ReadCloser.Close()
+func (c *content) Close() error {
+	if c.contentIsLoaded {
+		return c.ReadCloser.Close()
 	}
 
 	return nil
 }
 
-func (s *source) Origin() string {
-	return s.origin
+func (c *content) origin() string {
+	return c.origin_
 }
 
 type fileSource struct {
-	source
+	content
 }
 
-func (s *fileSource) Load(ctx context.Context) error {
+func (s *fileSource) load(ctx context.Context) error {
 	if !s.contentIsLoaded {
-		readCloser, err := loadFromFile(s.origin)
+		readCloser, err := loadFromFile(s.origin_)
 		if err != nil {
 			return err
 		}
@@ -104,7 +104,7 @@ func isRegularFile(path string) bool {
 }
 
 type urlSource struct {
-	source
+	content
 	timeout time.Duration
 	cancel  context.CancelFunc
 }
@@ -128,15 +128,15 @@ func (s *urlSource) Close() error {
 		s.cancel = nil
 	}
 
-	return s.source.Close()
+	return s.content.Close()
 }
 
-func (s *urlSource) Load(ctx context.Context) error {
+func (s *urlSource) load(ctx context.Context) error {
 	if !s.contentIsLoaded {
 		return repeatUntilNotError(loadRepeatTimes, func() error {
-			readCloser, cancel, err := loadFromURL(ctx, s.origin, s.timeout)
+			readCloser, cancel, err := loadFromURL(ctx, s.origin_, s.timeout)
 			if err != nil {
-				return fmt.Errorf("can't load source data from origin %s: %s", s.origin, err)
+				return fmt.Errorf("can't load source data from origin %s: %s", s.origin_, err)
 			}
 
 			s.cancel = cancel

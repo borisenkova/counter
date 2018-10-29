@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-type Result struct {
+type result struct {
 	subtotal *big.Int
 	origin   string
 	error
@@ -24,8 +24,8 @@ func Run(ctx context.Context, input io.Reader, substring []byte, maxNumberOfWork
 	calculateTotal(results)
 }
 
-func processInput(ctx context.Context, input io.Reader, httpTimeout time.Duration) <-chan Source {
-	tasks := make(chan Source)
+func processInput(ctx context.Context, input io.Reader, httpTimeout time.Duration) <-chan source {
+	tasks := make(chan source)
 
 	go func() {
 		scanner := bufio.NewScanner(input)
@@ -46,7 +46,7 @@ func processInput(ctx context.Context, input io.Reader, httpTimeout time.Duratio
 				}
 
 				origin := scanner.Text()
-				source, err := NewSource(origin, httpTimeout)
+				source, err := newSource(origin, httpTimeout)
 				if err != nil {
 					log.Printf("Can't identify source '%s': %v", origin, err)
 					continue
@@ -60,7 +60,7 @@ func processInput(ctx context.Context, input io.Reader, httpTimeout time.Duratio
 	return tasks
 }
 
-func calculateTotal(results <-chan *Result) {
+func calculateTotal(results <-chan *result) {
 	total := big.NewInt(0)
 	for result := range results {
 		if result.error != nil {
