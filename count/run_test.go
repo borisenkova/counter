@@ -26,8 +26,7 @@ func Test_Run_Stop(t *testing.T) {
 	})
 }
 
-func Test_Run_Stop_SigInt(t *testing.T) {
-	substring := []byte("SomeSubstring")
+func Test_Run_Stop_Canceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := spawnSlowServer()
 	defer s.Close()
@@ -35,7 +34,7 @@ func Test_Run_Stop_SigInt(t *testing.T) {
 	t.Run("When really slow origin is processed", func(t *testing.T) {
 		done := make(chan struct{})
 		go func() {
-			Run(ctx, bytes.NewBufferString(s.URL), substring, 1, time.Minute)
+			Run(ctx, bytes.NewBufferString(s.URL), []byte("SomeSubstring"), 1, time.Minute)
 			done <- struct{}{}
 		}()
 
