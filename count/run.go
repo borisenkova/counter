@@ -24,8 +24,8 @@ func Run(ctx context.Context, input io.Reader, substring []byte, maxNumberOfWork
 	calculateTotal(results)
 }
 
-func processInput(ctx context.Context, input io.Reader, httpTimeout time.Duration) <-chan *Source {
-	tasks := make(chan *Source)
+func processInput(ctx context.Context, input io.Reader, httpTimeout time.Duration) <-chan Source {
+	tasks := make(chan Source)
 
 	go func() {
 		scanner := bufio.NewScanner(input)

@@ -12,32 +12,101 @@ import (
 	"time"
 )
 
-type Source struct {
+type Source interface {
 	io.ReadCloser
-	origin          string
-	contentIsLoaded bool
-	load            loadContentFunc
-	cancel          context.CancelFunc
+	Origin() string
+	Load(ctx context.Context) error
 }
-
-type loadContentFunc func(context.Context, string) (io.ReadCloser, context.CancelFunc, error)
 
 const (
 	errEmptyOriginStr   = "empty origin"
 	errUnknownSourceStr = "unknown source"
 )
 
-func NewSource(origin string, timeout time.Duration) (*Source, error) {
+func NewSource(origin string, timeout time.Duration) (Source, error) {
 	if len(origin) == 0 {
 		return nil, errors.New(errEmptyOriginStr)
 	}
 	if isRegularFile(origin) {
-		return &Source{origin: origin, load: fromFile}, nil
+		source := &fileSource{}
+		source.origin = origin
+		return source, nil
 	}
 	if isHTTPURL(origin) {
-		return &Source{origin: origin, load: fromURL(timeout)}, nil
+		source := &urlSource{}
+		source.origin = origin
+		source.timeout = timeout
+		return source, nil
 	}
 	return nil, errors.New(errUnknownSourceStr)
+}
+
+type source struct {
+	io.ReadCloser
+	contentIsLoaded bool
+	origin          string
+}
+
+func (s *source) Read(p []byte) (n int, err error) {
+	if s.ReadCloser == nil {
+		return 0, nil
+	}
+
+	return s.ReadCloser.Read(p)
+}
+
+func (s *source) Close() error {
+	if s.contentIsLoaded {
+		return s.ReadCloser.Close()
+	}
+
+	return nil
+}
+
+func (s *source) Origin() string {
+	return s.origin
+}
+
+type fileSource struct {
+	source
+}
+
+func (s *fileSource) Load(ctx context.Context) error {
+	if !s.contentIsLoaded {
+		readCloser, err := loadFromFile(s.origin)
+		if err != nil {
+			return err
+		}
+
+		s.contentIsLoaded = true
+		s.ReadCloser = readCloser
+	}
+	return nil
+}
+
+func loadFromFile(name string) (io.ReadCloser, error) {
+	file, err := os.Open(name)
+	if err != nil {
+		return nil, fmt.Errorf("can't open file %s: %v", name, err)
+	}
+
+	return file, nil
+}
+
+// isRegularFile returns true if file from provided filepath is regular file
+func isRegularFile(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+
+	return info.Mode().IsRegular()
+}
+
+type urlSource struct {
+	source
+	timeout time.Duration
+	cancel  context.CancelFunc
 }
 
 const loadRepeatTimes = 10
@@ -53,10 +122,19 @@ func repeatUntilNotError(times int, f func() error) (err error) {
 	return
 }
 
-func (s *Source) Load(ctx context.Context) error {
+func (s *urlSource) Close() error {
+	if s.cancel != nil {
+		s.cancel()
+		s.cancel = nil
+	}
+
+	return s.source.Close()
+}
+
+func (s *urlSource) Load(ctx context.Context) error {
 	if !s.contentIsLoaded {
 		return repeatUntilNotError(loadRepeatTimes, func() error {
-			readCloser, cancel, err := s.load(ctx, s.origin)
+			readCloser, cancel, err := loadFromURL(ctx, s.origin, s.timeout)
 			if err != nil {
 				return fmt.Errorf("can't load source data from origin %s: %s", s.origin, err)
 			}
@@ -70,34 +148,23 @@ func (s *Source) Load(ctx context.Context) error {
 	return nil
 }
 
-func (s *Source) Read(p []byte) (n int, err error) {
-	if s.ReadCloser == nil {
-		return 0, nil
-	}
-
-	return s.ReadCloser.Read(p)
-}
-
-func (s *Source) Close() error {
-	if s.contentIsLoaded {
-		if s.cancel != nil {
-			s.cancel()
-		}
-
-		return s.ReadCloser.Close()
-	}
-
-	return nil
-}
-
-// isRegularFile returns true if file from provided filepath is regular file
-func isRegularFile(path string) bool {
-	info, err := os.Stat(path)
+func loadFromURL(c context.Context, url string, timeout time.Duration) (io.ReadCloser, context.CancelFunc, error) {
+	ctx, cancel := context.WithTimeout(c, timeout)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	// Request identity encoding to avoid 'unexpected EOF' error if content
+	// is gzipped
+	// via https://stackoverflow.com/a/21160982
+	req.Header.Add("Accept-Encoding", "identity")
 	if err != nil {
-		return false
+		return nil, nil, fmt.Errorf("can't create HTTP request from URL %s: %s", url, err)
 	}
 
-	return info.Mode().IsRegular()
+	resp, err := httpDo(ctx, req)
+	if err != nil {
+		return nil, nil, fmt.Errorf("can't load URL %s content: %v", url, err)
+	}
+
+	return resp.Body, cancel, nil
 }
 
 const (
@@ -113,36 +180,6 @@ func isHTTPURL(rawURL string) bool {
 
 	scheme := strings.ToLower(parsed.Scheme)
 	return scheme == schemeHTTP || scheme == schemeHTTPS
-}
-
-func fromFile(ctx context.Context, name string) (io.ReadCloser, context.CancelFunc, error) {
-	file, err := os.Open(name)
-	if err != nil {
-		return nil, nil, fmt.Errorf("can't open file %s: %v", name, err)
-	}
-
-	return file, nil, nil
-}
-
-func fromURL(timeout time.Duration) loadContentFunc {
-	return func(c context.Context, url string) (io.ReadCloser, context.CancelFunc, error) {
-		ctx, cancel := context.WithTimeout(c, timeout)
-		req, err := http.NewRequest(http.MethodGet, url, nil)
-		// Request identity encoding to avoid 'unexpected EOF' error if content
-		// is gzipped
-		// via https://stackoverflow.com/a/21160982
-		req.Header.Add("Accept-Encoding", "identity")
-		if err != nil {
-			return nil, nil, fmt.Errorf("can't create HTTP request from URL %s: %s", url, err)
-		}
-
-		resp, err := httpDo(ctx, req)
-		if err != nil {
-			return nil, nil, fmt.Errorf("can't load URL %s content: %v", url, err)
-		}
-
-		return resp.Body, cancel, nil
-	}
 }
 
 // httpDo issues the HTTP request in goroutine and returns response and error if

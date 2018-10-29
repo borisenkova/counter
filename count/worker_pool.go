@@ -12,13 +12,13 @@ type WorkerPool struct {
 	numberOfWorkers int
 	newWorkerFunc   NewWorker
 	wg              *sync.WaitGroup
-	tasks           chan *Source
+	tasks           chan Source
 	results         chan *Result
 }
 
-type NewWorker func(ctx context.Context, wg *sync.WaitGroup, tasks <-chan *Source, results chan<- *Result)
+type NewWorker func(ctx context.Context, wg *sync.WaitGroup, tasks <-chan Source, results chan<- *Result)
 
-func (p *WorkerPool) consume(tasks <-chan *Source) <-chan *Result {
+func (p *WorkerPool) consume(tasks <-chan Source) <-chan *Result {
 	p.wg.Add(1)
 	go func() {
 		defer func() {
@@ -49,7 +49,7 @@ func (p *WorkerPool) waitForWorkersStop() {
 	p.wg.Wait()
 }
 
-func (p *WorkerPool) process(source *Source) {
+func (p *WorkerPool) process(source Source) {
 	if p.canSpawnWorkers() {
 		p.spawnWorker()
 	}
@@ -57,7 +57,7 @@ func (p *WorkerPool) process(source *Source) {
 	p.sendWork(source)
 }
 
-func (p *WorkerPool) sendWork(source *Source) {
+func (p *WorkerPool) sendWork(source Source) {
 	select {
 	case <-p.ctx.Done():
 	case p.tasks <- source:
@@ -80,7 +80,7 @@ func newWorkerPool(ctx context.Context, poolSize int, workerFunc NewWorker) *Wor
 		maxPoolSize:   poolSize,
 		newWorkerFunc: workerFunc,
 		wg:            &sync.WaitGroup{},
-		tasks:         make(chan *Source),
+		tasks:         make(chan Source),
 		results:       make(chan *Result),
 	}
 
@@ -88,7 +88,7 @@ func newWorkerPool(ctx context.Context, poolSize int, workerFunc NewWorker) *Wor
 }
 
 func workerFunc(substring []byte) NewWorker {
-	return func(ctx context.Context, wg *sync.WaitGroup, tasks <-chan *Source, results chan<- *Result) {
+	return func(ctx context.Context, wg *sync.WaitGroup, tasks <-chan Source, results chan<- *Result) {
 		defer func() {
 			if r := recover(); r != nil {
 				log.Println("Recovered in workerFunc", r)
@@ -109,7 +109,7 @@ func workerFunc(substring []byte) NewWorker {
 					return
 				}
 
-				results <- &Result{subtotal: subtotal, origin: source.origin, error: err}
+				results <- &Result{subtotal: subtotal, origin: source.Origin(), error: err}
 			case <-ctx.Done():
 				return
 			}

@@ -75,10 +75,10 @@ func Test_WorkerPool_Stop(t *testing.T) {
 	})
 }
 
-func createWorkerPool(ctx context.Context, substring []byte) (*WorkerPool, chan *Source) {
+func createWorkerPool(ctx context.Context, substring []byte) (*WorkerPool, chan Source) {
 	worker := workerFunc(substring)
 	pool := newWorkerPool(ctx, 1, worker)
-	tasks := make(chan *Source, 1)
+	tasks := make(chan Source, 1)
 	pool.consume(tasks)
 
 	return pool, tasks
