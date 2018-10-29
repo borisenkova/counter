@@ -12,8 +12,7 @@ import (
 const averageWebpageSize = 2e+6
 const errCountSubstringCanceledStr = "count substring is canceled"
 
-func countSubstring(ctx context.Context, source io.ReadCloser, buf, substr []byte) (total *big.Int, err error) {
-	defer source.Close()
+func countSubstring(ctx context.Context, source io.Reader, buf, substr []byte) (total *big.Int, err error) {
 	total = big.NewInt(0)
 	substrIndex := 0
 	substrLen := len(substr)
@@ -89,6 +88,7 @@ func workerFunc(substring []byte) NewWorker {
 }
 
 func processSource(ctx context.Context, source *Source, buf, substring []byte) (subtotal *big.Int, err error) {
+	defer source.Close()
 	if err = source.get(ctx); err != nil {
 		return
 	}

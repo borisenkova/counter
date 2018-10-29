@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 )
 
 type Source struct {
@@ -16,16 +17,17 @@ type Source struct {
 	origin          string
 	contentIsLoaded bool
 	load            loadContentFunc
+	cancel          context.CancelFunc
 }
 
-type loadContentFunc func(context.Context, string) (io.ReadCloser, error)
+type loadContentFunc func(context.Context, string) (io.ReadCloser, context.CancelFunc, error)
 
 const (
 	errEmptyOriginStr   = "empty origin"
 	errUnknownSourceStr = "unknown source"
 )
 
-func NewSource(origin string) (*Source, error) {
+func NewSource(origin string, timeout time.Duration) (*Source, error) {
 	if len(origin) == 0 {
 		return nil, errors.New(errEmptyOriginStr)
 	}
@@ -33,20 +35,37 @@ func NewSource(origin string) (*Source, error) {
 		return &Source{origin: origin, load: fromFile}, nil
 	}
 	if isHTTPURL(origin) {
-		return &Source{origin: origin, load: fromURL()}, nil
+		return &Source{origin: origin, load: fromURL(timeout)}, nil
 	}
 	return nil, errors.New(errUnknownSourceStr)
 }
 
+const loadRepeatTimes = 10
+
+func repeatUntilNotError(times int, f func() error) (err error) {
+	for i := 0; i < times; i++ {
+		err = f()
+		if err == nil {
+			return
+		}
+	}
+
+	return
+}
+
 func (s *Source) get(ctx context.Context) error {
 	if !s.contentIsLoaded {
-		readCloser, err := s.load(ctx, s.origin)
-		if err != nil {
-			return fmt.Errorf("can't load source data from origin %s: %s", s.origin, err)
-		}
+		return repeatUntilNotError(loadRepeatTimes, func() error {
+			readCloser, cancel, err := s.load(ctx, s.origin)
+			if err != nil {
+				return fmt.Errorf("can't load source data from origin %s: %s", s.origin, err)
+			}
 
-		s.ReadCloser = readCloser
-		s.contentIsLoaded = true
+			s.cancel = cancel
+			s.ReadCloser = readCloser
+			s.contentIsLoaded = true
+			return nil
+		})
 	}
 	return nil
 }
@@ -61,6 +80,10 @@ func (s *Source) Read(p []byte) (n int, err error) {
 
 func (s *Source) Close() error {
 	if s.contentIsLoaded {
+		if s.cancel != nil {
+			s.cancel()
+		}
+
 		return s.ReadCloser.Close()
 	}
 
@@ -92,28 +115,29 @@ func isHTTPURL(rawURL string) bool {
 	return scheme == schemeHTTP || scheme == schemeHTTPS
 }
 
-func fromFile(ctx context.Context, name string) (io.ReadCloser, error) {
+func fromFile(ctx context.Context, name string) (io.ReadCloser, context.CancelFunc, error) {
 	file, err := os.Open(name)
 	if err != nil {
-		return nil, fmt.Errorf("can't open file %s: %v", name, err)
+		return nil, nil, fmt.Errorf("can't open file %s: %v", name, err)
 	}
 
-	return file, nil
+	return file, nil, nil
 }
 
-func fromURL() loadContentFunc {
-	return func(ctx context.Context, url string) (io.ReadCloser, error) {
+func fromURL(timeout time.Duration) loadContentFunc {
+	return func(c context.Context, url string) (io.ReadCloser, context.CancelFunc, error) {
+		ctx, cancel := context.WithTimeout(c, timeout)
 		req, err := http.NewRequest(http.MethodGet, url, nil)
 		if err != nil {
-			return nil, fmt.Errorf("can't create HTTP request from URL %s: %s", url, err)
+			return nil, nil, fmt.Errorf("can't create HTTP request from URL %s: %s", url, err)
 		}
 
 		resp, err := httpDo(ctx, req)
 		if err != nil {
-			return nil, fmt.Errorf("can't load URL %s content: %v", url, err)
+			return nil, nil, fmt.Errorf("can't load URL %s content: %v", url, err)
 		}
 
-		return resp.Body, nil
+		return resp.Body, cancel, nil
 	}
 }
 

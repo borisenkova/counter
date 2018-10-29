@@ -35,7 +35,7 @@ func Test_Run_Stop_SigInt(t *testing.T) {
 	t.Run("When really slow origin is processed", func(t *testing.T) {
 		done := make(chan struct{})
 		go func() {
-			Run(ctx, bytes.NewBufferString(s.URL), substring, 1)
+			Run(ctx, bytes.NewBufferString(s.URL), substring, 1, time.Minute)
 			done <- struct{}{}
 		}()
 

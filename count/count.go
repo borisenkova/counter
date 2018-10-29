@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"math/big"
+	"time"
 )
 
 type Result struct {
@@ -14,8 +15,8 @@ type Result struct {
 	error
 }
 
-func Run(ctx context.Context, input io.Reader, substring []byte, maxNumberOfWorkers int) {
-	tasks := processInput(ctx, input)
+func Run(ctx context.Context, input io.Reader, substring []byte, maxNumberOfWorkers int, httpTimeout time.Duration) {
+	tasks := processInput(ctx, input, httpTimeout)
 
 	pool := newWorkerPool(ctx, maxNumberOfWorkers, workerFunc(substring))
 	results := pool.consume(tasks)
@@ -23,7 +24,7 @@ func Run(ctx context.Context, input io.Reader, substring []byte, maxNumberOfWork
 	calculateTotal(results)
 }
 
-func processInput(ctx context.Context, input io.Reader) <-chan *Source {
+func processInput(ctx context.Context, input io.Reader, httpTimeout time.Duration) <-chan *Source {
 	tasks := make(chan *Source)
 
 	go func() {
@@ -45,7 +46,7 @@ func processInput(ctx context.Context, input io.Reader) <-chan *Source {
 				}
 
 				origin := scanner.Text()
-				source, err := NewSource(origin)
+				source, err := NewSource(origin, httpTimeout)
 				if err != nil {
 					log.Printf("Can't identify source '%s': %v", origin, err)
 					continue

@@ -23,7 +23,7 @@ func Test_WorkerPool_ProcessFile(t *testing.T) {
 	t.Run(fmt.Sprintf("When file with %d occurences of substring is processed", numberOfOccurrences), func(t *testing.T) {
 		file := createTmpFileFilledWith(t, substring, numberOfOccurrences)
 
-		source, err := NewSource(file.Name())
+		source, err := NewSource(file.Name(), time.Minute)
 		require.NoError(t, err)
 		tasks <- source
 		t.Run("It must return correct subtotal", func(t *testing.T) {
@@ -41,7 +41,7 @@ func Test_WorkerPool_ProcessURL(t *testing.T) {
 		s := spawnServer(t, substring, numberOfOccurrences)
 		defer s.Close()
 
-		source, err := NewSource(s.URL)
+		source, err := NewSource(s.URL, time.Minute)
 		require.NoError(t, err)
 
 		tasks <- source
@@ -60,7 +60,7 @@ func Test_WorkerPool_Stop(t *testing.T) {
 	pool, _ := createWorkerPool(ctx, substring)
 
 	t.Run("When really slow origin is processed", func(t *testing.T) {
-		source, err := NewSource(s.URL)
+		source, err := NewSource(s.URL, time.Minute)
 		require.NoError(t, err)
 
 		pool.process(source)
