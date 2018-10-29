@@ -89,7 +89,7 @@ func workerFunc(substring []byte) NewWorker {
 
 func processSource(ctx context.Context, source *Source, buf, substring []byte) (subtotal *big.Int, err error) {
 	defer source.Close()
-	if err = source.get(ctx); err != nil {
+	if err = source.Load(ctx); err != nil {
 		return
 	}
 

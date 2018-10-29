@@ -53,7 +53,7 @@ func repeatUntilNotError(times int, f func() error) (err error) {
 	return
 }
 
-func (s *Source) get(ctx context.Context) error {
+func (s *Source) Load(ctx context.Context) error {
 	if !s.contentIsLoaded {
 		return repeatUntilNotError(loadRepeatTimes, func() error {
 			readCloser, cancel, err := s.load(ctx, s.origin)
