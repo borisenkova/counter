@@ -2,6 +2,7 @@ package count
 
 import (
 	"context"
+	"log"
 	"sync"
 )
 
@@ -84,4 +85,34 @@ func newWorkerPool(ctx context.Context, poolSize int, workerFunc NewWorker) *Wor
 	}
 
 	return pool
+}
+
+func workerFunc(substring []byte) NewWorker {
+	return func(ctx context.Context, wg *sync.WaitGroup, tasks <-chan *Source, results chan<- *Result) {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Println("Recovered in workerFunc", r)
+			}
+		}()
+		defer wg.Done()
+
+		buf := make([]byte, averageWebpageSize)
+		for {
+			select {
+			case source, hasMore := <-tasks:
+				if !hasMore {
+					return
+				}
+
+				subtotal, err := processSource(ctx, source, buf, substring)
+				if ctx.Err() != nil {
+					return
+				}
+
+				results <- &Result{subtotal: subtotal, origin: source.origin, error: err}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}
 }
