@@ -15,10 +15,10 @@ type result struct {
 	error
 }
 
-func Run(ctx context.Context, input io.Reader, substring []byte, maxNumberOfWorkers int, httpTimeout time.Duration) {
+func Run(ctx context.Context, input io.Reader, substring []byte, maxNumberOfWorkers int, httpTimeout, workerShutdownTimeout time.Duration) {
 	tasks := processInput(ctx, input, httpTimeout)
 
-	pool := newWorkerPool(ctx, maxNumberOfWorkers, workerFunc(substring))
+	pool := newWorkerPool(ctx, maxNumberOfWorkers, workerFunc(substring, workerShutdownTimeout))
 	results := pool.consume(tasks)
 
 	calculateTotal(results)

@@ -25,5 +25,5 @@ func main() {
 		cancel()
 	}()
 
-	count.Run(ctx, os.Stdin, substring, conf.MaxNumberOfWorkers, conf.URLRequestTimeout)
+	count.Run(ctx, os.Stdin, substring, conf.MaxNumberOfWorkers, conf.URLRequestTimeout, conf.WorkerShutdownTimeout)
 }

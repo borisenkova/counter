@@ -16,7 +16,7 @@ func Test_Run_Stop(t *testing.T) {
 	t.Run("When URL is processed", func(t *testing.T) {
 		done := make(chan struct{})
 		go func() {
-			Run(ctx, bytes.NewBufferString(s.URL), substring, 1, time.Minute)
+			Run(ctx, bytes.NewBufferString(s.URL), substring, 1, time.Minute, time.Minute)
 			done <- struct{}{}
 		}()
 
@@ -34,7 +34,7 @@ func Test_Run_Stop_Canceled(t *testing.T) {
 	t.Run("When really slow origin is processed", func(t *testing.T) {
 		done := make(chan struct{})
 		go func() {
-			Run(ctx, bytes.NewBufferString(s.URL), []byte("SomeSubstring"), 1, time.Minute)
+			Run(ctx, bytes.NewBufferString(s.URL), []byte("SomeSubstring"), 1, time.Minute, time.Minute)
 			done <- struct{}{}
 		}()
 

@@ -8,9 +8,10 @@ import (
 )
 
 type Config struct {
-	MaxNumberOfWorkers int
-	URLRequestTimeout  time.Duration
-	Substring          []byte
+	MaxNumberOfWorkers    int
+	URLRequestTimeout     time.Duration
+	WorkerShutdownTimeout time.Duration
+	Substring             []byte
 }
 
 func (c *Config) loadFromEnv() *Config {
@@ -30,17 +31,24 @@ func (c *Config) loadFromEnv() *Config {
 	}
 	c.Substring = []byte(substring)
 
-	urlRequestTimeoutStr := os.Getenv("URL_REQUEST_TIMEOUT_MILLISECONDS")
-	if len(urlRequestTimeoutStr) == 0 {
-		urlRequestTimeoutStr = "60000"
-	}
-	urlRequestTimeout, err := strconv.ParseInt(urlRequestTimeoutStr, 10, 64)
-	if err != nil || urlRequestTimeout < 1 {
-		panic(fmt.Sprintf("Invalid value for URL_REQUEST_TIMEOUT_MILLISECONDS: must be uint above zero, got %v", urlRequestTimeoutStr))
-	}
-	c.URLRequestTimeout = time.Duration(urlRequestTimeout) * time.Millisecond
+	c.URLRequestTimeout = parseDurationMs("URL_REQUEST_TIMEOUT_MILLISECONDS", "60000")
+	c.WorkerShutdownTimeout = parseDurationMs("WORKER_SHUTDOWN_TIMEOUT_MILLISECONDS", "60000")
 
 	return c
+}
+
+func parseDurationMs(envVar string, defaultValue string) time.Duration {
+	durationStr := os.Getenv(envVar)
+	if len(durationStr) == 0 {
+		durationStr = defaultValue
+	}
+
+	duration, err := strconv.ParseInt(durationStr, 10, 64)
+	if err != nil || duration < 1 {
+		panic(fmt.Sprintf("Invalid value for %s: must be uint above zero, got %v", envVar, durationStr))
+	}
+
+	return time.Duration(duration) * time.Millisecond
 }
 
 func Load() *Config {

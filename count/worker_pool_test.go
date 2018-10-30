@@ -75,8 +75,36 @@ func Test_WorkerPool_Stop(t *testing.T) {
 	})
 }
 
+func Test_WorkerPool_ShutdownWorkerIfInactive(t *testing.T) {
+	inactivityTimeout := time.Second
+	worker := workerFunc([]byte("1"), inactivityTimeout)
+	pool := newWorkerPool(context.Background(), 1, worker)
+	tasks := make(chan source, 1)
+	pool.consume(tasks)
+
+	t.Run("When one task is processed", func(t *testing.T) {
+		source, err := newSource("http://localhost", inactivityTimeout)
+		require.NoError(t, err)
+		tasks <- source
+		<-pool.results
+
+		t.Run("One worker must still be running", func(t *testing.T) {
+			require.Equal(t, 1, pool.getNumberOfWorkers())
+
+			t.Run("Then if no tasks is provided during some period of time", func(t *testing.T) {
+				timer := time.NewTimer(2 * inactivityTimeout)
+				<-timer.C
+
+				t.Run("It must stop running worker", func(t *testing.T) {
+					require.Equal(t, 0, pool.getNumberOfWorkers())
+				})
+			})
+		})
+	})
+}
+
 func createWorkerPool(ctx context.Context, substring []byte) (*workerPool, chan source) {
-	worker := workerFunc(substring)
+	worker := workerFunc(substring, time.Minute)
 	pool := newWorkerPool(ctx, 1, worker)
 	tasks := make(chan source, 1)
 	pool.consume(tasks)

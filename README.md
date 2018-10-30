@@ -20,6 +20,7 @@ Parameters are passed through environmental variables. Possible parameters are:
 * `MAX_NUMBER_OF_WORKERS` -- maximum number of sources to process simultaneously. Should be above zero and below math.MaxInt32. Default value is `5`;
 * `SUBSTRING` -- string to count in sources. Default value is `Go`. Only non-overlapping substring entries are counted;
 * `URL_REQUEST_TIMEOUT_MILLISECONDS` -- timeout for processing URL source in milliseconds. Default value is `60000`. Should be increased before processing large web pages or in case of slow network or slow endpoint servers;
+* `WORKER_SHUTDOWN_TIMEOUT_MILLISECONDS` -- worker will stop after this period (in milliseconds) of inactivity if no new sources are provided. Default value is `60000`.
 
 ## Example
 
